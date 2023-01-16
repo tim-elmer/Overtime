@@ -1,0 +1,16 @@
+= Overtime
+
+A simple bot to help you keep track of what time it is.
+
+== Use
+Overtime will automatically reply to messages it believes to contain a time. Specifically, times formatted like `4:00 AM`, `21:00`, or `3 PM`.
+
+=== Commands
+`set-timezone`:: Sets the timezone that your times will be translated from. Overtime stores user timezones globally across Discord servers, so you should only need to do this once.
+`timezone`::: The ID of, or a search entry for, the timezone you wish to set. The entry doesn't need to be exact; Overtime will display a list of matching timezones if multiple matches are found, run the command again with a more specific query if this occurs.
+`remove-data`:: Causes Overtime to remove all data associated with your Discord account. This does _not_ include responses to messages, as these are stored by Discord, not Overtime.
+
+== Configuration
+`Configuration`::
+`Database`::: The path to the database file.
+`Token`::: A Discord bot token.

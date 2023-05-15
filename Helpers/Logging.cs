@@ -2,11 +2,12 @@ using System.Collections.ObjectModel;
 using Discord;
 using Serilog.Events;
 
-namespace Overtime.Helpers
+namespace Overtime.Helpers;
+
+public static class Logging
 {
-    public static class Logging
-    {
-        public static ReadOnlyDictionary<LogSeverity, LogEventLevel> LOG_LEVEL_MAP = new( new Dictionary<LogSeverity, LogEventLevel>()
+    public static readonly ReadOnlyDictionary<LogSeverity, LogEventLevel> LogLevelMap = new(
+        new Dictionary<LogSeverity, LogEventLevel>
         {
             { LogSeverity.Critical, LogEventLevel.Fatal },
             { LogSeverity.Error, LogEventLevel.Error },
@@ -15,5 +16,4 @@ namespace Overtime.Helpers
             { LogSeverity.Verbose, LogEventLevel.Verbose },
             { LogSeverity.Debug, LogEventLevel.Debug }
         });
-    }
 }

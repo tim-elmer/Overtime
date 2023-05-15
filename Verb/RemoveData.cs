@@ -1,31 +1,30 @@
 using Discord.WebSocket;
 
-namespace Overtime.Verb
+namespace Overtime.Verb;
+
+public sealed class RemoveData : IVerb
 {
-    public sealed class RemoveData : IVerb
+    private readonly Microsoft.EntityFrameworkCore.IDbContextFactory<Model.Context> _contextFactory;
+
+    public string Command => "z-remove-all-user-data";
+
+    public string Description => "Remove all data associated with your account.";
+
+    public RemoveData(Microsoft.EntityFrameworkCore.IDbContextFactory<Model.Context> contextFactory) =>
+        _contextFactory = contextFactory;
+
+    public async Task OnCommandExecuted(SocketCommandBase command)
     {
-        private Microsoft.EntityFrameworkCore.IDbContextFactory<Model.Context> _contextFactory;
-
-        public string Command => "remove-data";
-
-        public string Description => "Remove all data associated with your account.";
-
-        public RemoveData(Microsoft.EntityFrameworkCore.IDbContextFactory<Model.Context> contextFactory) =>
-            _contextFactory = contextFactory;
-
-        public async Task OnCommandExecuted(SocketSlashCommand command)
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var userInformation = context.UserInformation.FirstOrDefault(i => i.UserId == command.User.Id);
+        if (userInformation is null)
         {
-            using var context = _contextFactory.CreateDbContext();
-            var userInformation = context.UserInformation.FirstOrDefault(i => i.UserId == command.User.Id);
-            if (userInformation is null)
-            {
-                await command.RespondAsync("I don't know you... 🤔\r\r(No user data to remove.)", ephemeral: true);
-                return;
-            }
-
-            context.UserInformation.Remove(userInformation);
-            await context.SaveChangesAsync();
-            await command.RespondAsync("Done.", ephemeral: true);
+            await command.RespondAsync("I don't know you... 🤔\r\r(No user data to remove.)", ephemeral: true);
+            return;
         }
+
+        context.UserInformation.Remove(userInformation);
+        await context.SaveChangesAsync();
+        await command.RespondAsync("Done.", ephemeral: true);
     }
 }

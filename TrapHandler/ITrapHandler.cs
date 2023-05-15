@@ -1,14 +1,13 @@
 using Discord.WebSocket;
 
-namespace Overtime.TrapHandler
+namespace Overtime.TrapHandler;
+
+public interface ITrapHandler
 {
-    public interface ITrapHandler
-    {
-        /// <summary>
-        /// A handler for the message.
-        /// </summary>
-        /// <param name="message"></param>
-        /// <returns></returns>
-        public Task Trap(SocketMessage message);
-    }
+    /// <summary>
+    /// A handler for the message.
+    /// </summary>
+    /// <param name="message"></param>
+    /// <returns></returns>
+    public Task Trap(SocketMessage message);
 }

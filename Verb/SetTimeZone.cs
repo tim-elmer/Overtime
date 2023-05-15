@@ -1,92 +1,102 @@
 using Discord;
 using Discord.WebSocket;
+using Overtime.Model;
 
-namespace Overtime.Verb
+namespace Overtime.Verb;
+
+public sealed class SetTimeZone : IVerb
 {
-    public sealed class SetTimeZone : IVerb
+    private static readonly IReadOnlyCollection<TimeZoneInfo> TimeZones = TimeZoneInfo.GetSystemTimeZones();
+
+    private readonly Microsoft.EntityFrameworkCore.IDbContextFactory<Context> _contextFactory;
+
+    public string Command => "set-timezone";
+    public string Description => "Set your timezone for time translation (global).";
+    public ApplicationCommandProperties ApplicationCommandProperties { get; }
+
+    public SetTimeZone(Microsoft.EntityFrameworkCore.IDbContextFactory<Context> contextFactory)
     {
-        private static readonly IReadOnlyCollection<TimeZoneInfo> TIME_ZONES = TimeZoneInfo.GetSystemTimeZones();
+        _contextFactory = contextFactory;
 
-        private Microsoft.EntityFrameworkCore.IDbContextFactory<Model.Context> _contextFactory;
-        private ApplicationCommandProperties _applicationCommandProperties;
-
-        public string Command => "set-timezone";
-        public string Description => "Set your timezone for time translation (global).";
-        public ApplicationCommandProperties ApplicationCommandProperties => _applicationCommandProperties;
-
-        public SetTimeZone(Microsoft.EntityFrameworkCore.IDbContextFactory<Model.Context> contextFactory)
+        ApplicationCommandProperties = new SlashCommandBuilder
         {
-            _contextFactory = contextFactory;
-
-            _applicationCommandProperties = new SlashCommandBuilder()
+            Name = Command,
+            Description = Description,
+            Options = new List<SlashCommandOptionBuilder>
             {
-                Name = Command,
-                Description = Description,
-                Options = new()
+                new()
                 {
-                    new SlashCommandOptionBuilder()
-                    {
-                        Name = "timezone",
-                        Type = ApplicationCommandOptionType.String,
-                        Description = "The timezone in which you reside, from which your messages will be converted.",
-                        IsRequired = true
-                    }
+                    Name = "timezone",
+                    Type = ApplicationCommandOptionType.String,
+                    Description = "The timezone in which you reside, from which your messages will be converted.",
+                    IsRequired = true
                 }
-            }.Build();
-        }
+            }
+        }.Build();
+    }
 
-        public async Task OnCommandExecuted(SocketSlashCommand command)
+    public async Task OnCommandExecuted(SocketCommandBase command)
+    {
+        var slashCommand = command as SocketSlashCommand ??
+                           throw new InvalidCastException();
+
+        var timeZoneOption = slashCommand.Data.Options.FirstOrDefault();
+        if (timeZoneOption is null)
         {
-            var timeZoneOption = command.Data.Options.FirstOrDefault();
-            if (timeZoneOption is null)
-            {
-                await command.RespondAsync("You *will* need to provide a timezone for me to save it...", ephemeral: true);
-                return;
-            }
-            var timeZoneIdUserValue = timeZoneOption.Value as string;
-            if (string.IsNullOrWhiteSpace(timeZoneIdUserValue))
-            {
-                await command.RespondAsync("You *will* need to provide a timezone for me to save it...", ephemeral: true);
-                return;
-            }
-            var timeZones = TIME_ZONES.Where(z => 
-                z.Id.Contains(timeZoneIdUserValue, StringComparison.InvariantCultureIgnoreCase) ||
-                z.DisplayName.Contains(timeZoneIdUserValue, StringComparison.InvariantCultureIgnoreCase) ||
-                z.StandardName.Contains(timeZoneIdUserValue, StringComparison.OrdinalIgnoreCase) ||
-                z.DaylightName.Contains(timeZoneIdUserValue, StringComparison.OrdinalIgnoreCase)
-            );
-
-            if (timeZones.Count() == 0)
-            {
-                await command.RespondAsync("I didn't recognize that timezone.", ephemeral: true);
-                return;
-            }
-
-            string timeZoneId;
-            if (timeZones.Count() == 1)
-                timeZoneId = timeZones.First().Id;
-            else
-            {
-                await command.RespondAsync($"Sorry, you're going to need to be more specific. I found the following similar timezones:\r{FormatListTimeZones(timeZones)}", ephemeral: true);
-                return;
-            }
-
-            using var context = _contextFactory.CreateDbContext();
-            var userInformation = context.UserInformation.FirstOrDefault(i => i.UserId == command.User.Id);
-            if (userInformation is null)
-                await context.AddAsync(userInformation = new() { UserId = command.User.Id });
-            userInformation.TimeZoneId = timeZoneId;
-            await context.SaveChangesAsync();
-            await command.RespondAsync($"Got it! Timezone set to {timeZoneId} 👍", ephemeral: true);
+            await slashCommand.RespondAsync("You *will* need to provide a timezone for me to save it...",
+                ephemeral: true);
+            return;
         }
 
-        private string FormatListTimeZones(IEnumerable<TimeZoneInfo> timeZones)
+        var timeZoneIdUserValue = timeZoneOption.Value as string;
+        if (string.IsNullOrWhiteSpace(timeZoneIdUserValue))
         {
-            var stringBuilder = new System.Text.StringBuilder("  • ");
-            stringBuilder.AppendJoin("\r  • ", timeZones.Select(z => $"{z.DisplayName}: {z.Id}").Take(25));
-            if (timeZones.Count() > 25)
-                stringBuilder.Append("\r    ...");
-            return stringBuilder.ToString();
+            await slashCommand.RespondAsync("You *will* need to provide a timezone for me to save it...",
+                ephemeral: true);
+            return;
         }
+
+        var timeZones = TimeZones.Where(z =>
+            z.Id.Contains(timeZoneIdUserValue, StringComparison.InvariantCultureIgnoreCase) ||
+            z.DisplayName.Contains(timeZoneIdUserValue, StringComparison.InvariantCultureIgnoreCase) ||
+            z.StandardName.Contains(timeZoneIdUserValue, StringComparison.OrdinalIgnoreCase) ||
+            z.DaylightName.Contains(timeZoneIdUserValue, StringComparison.OrdinalIgnoreCase)
+        );
+
+        var timeZoneInfos = timeZones.ToList();
+        if (!timeZoneInfos.Any())
+        {
+            await slashCommand.RespondAsync("I didn't recognize that timezone.", ephemeral: true);
+            return;
+        }
+
+        string timeZoneId;
+        if (timeZoneInfos.Count == 1)
+            timeZoneId = timeZoneInfos.First().Id;
+        else
+        {
+            await slashCommand.RespondAsync(
+                $"Sorry, you're going to need to be more specific. I found the following similar timezones:\r{FormatListTimeZones(timeZoneInfos)}",
+                ephemeral: true);
+            return;
+        }
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var userInformation = context.UserInformation.FirstOrDefault(i => i.UserId == slashCommand.User.Id);
+        if (userInformation is null)
+            await context.AddAsync(userInformation = new UserInformation { UserId = slashCommand.User.Id });
+        userInformation.TimeZoneId = timeZoneId;
+        await context.SaveChangesAsync();
+        await slashCommand.RespondAsync($"Got it! Timezone set to {timeZoneId} 👍", ephemeral: true);
+    }
+
+    private static string FormatListTimeZones(IEnumerable<TimeZoneInfo> timeZones)
+    {
+        var stringBuilder = new System.Text.StringBuilder("  • ");
+        var timeZoneInfos = timeZones.ToList();
+        stringBuilder.AppendJoin("\r  • ", timeZoneInfos.Select(z => $"{z.DisplayName}: {z.Id}").Take(25));
+        if (timeZoneInfos.Count > 25)
+            stringBuilder.Append("\r    ...");
+        return stringBuilder.ToString();
     }
 }
